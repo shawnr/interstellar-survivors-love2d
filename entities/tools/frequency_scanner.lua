@@ -35,4 +35,54 @@ function FrequencyScanner:fire()
     end
 end
 
+-- Evolution: Harmonic Disruptor — 25 dmg, projectiles chain to nearby MOBs
+function FrequencyScanner:evolve()
+    FrequencyScanner.super.evolve(self)
+    self.damage = 25
+    self.chainOnHit = true
+    self.chainRange = 60
+    self.chainDamageMult = 0.5
+    if GrantsSystem then
+        self.damage = self.damage * GrantsSystem:getDamageMultiplier()
+    end
+end
+
+function FrequencyScanner:createProjectile(x, y, angle)
+    if GameplayScene and GameplayScene.projectilePool then
+        local proj = GameplayScene.projectilePool:get(
+            x, y, angle,
+            self.projectileSpeed * (1 + (self.projectileSpeedBonus or 0)),
+            self.damage,
+            self.data.projectileImage
+        )
+        if proj and self.chainOnHit then
+            local chainRange = self.chainRange
+            local chainDmgMult = self.chainDamageMult
+            local projSpeed = self.projectileSpeed * (1 + (self.projectileSpeedBonus or 0))
+            local projImage = self.data.projectileImage
+            proj.onHitCallback = function(hitProj, hitTarget)
+                if not GameplayScene or not GameplayScene.projectilePool then return end
+                local bestTarget, bestDistSq = nil, chainRange * chainRange
+                for _, mob in ipairs(GameplayScene.mobs) do
+                    if mob.active and mob ~= hitTarget then
+                        local distSq = Utils.distanceSquared(hitTarget.x, hitTarget.y, mob.x, mob.y)
+                        if distSq < bestDistSq then
+                            bestDistSq = distSq
+                            bestTarget = mob
+                        end
+                    end
+                end
+                if bestTarget then
+                    local chainAngle = Utils.vectorToAngle(bestTarget.x - hitTarget.x, bestTarget.y - hitTarget.y)
+                    GameplayScene.projectilePool:get(
+                        hitTarget.x, hitTarget.y, chainAngle,
+                        projSpeed, math.floor(hitProj.damage * chainDmgMult), projImage
+                    )
+                end
+            end
+        end
+        return proj
+    end
+end
+
 return FrequencyScanner

@@ -52,7 +52,7 @@ function MicroMissilePod:fire()
 
     -- Play sound
     if AudioManager then
-        AudioManager:playSFX("tool_rail_driver", 0.4)
+        AudioManager:playSFX("tool_micro_missile_pod", 0.4)
     end
 end
 
@@ -67,6 +67,17 @@ function MicroMissilePod:recalculateStats()
     elseif self.level >= 2 then
         self.projectilesPerShot = 4
         self.spreadAngle = 20
+    end
+end
+
+-- Evolution: Swarm Launcher — 8 dmg, +2 missiles per burst
+function MicroMissilePod:evolve()
+    MicroMissilePod.super.evolve(self)
+    self.damage = 8
+    self.projectilesPerShot = self.projectilesPerShot + 2
+    self.spreadAngle = 30
+    if GrantsSystem then
+        self.damage = self.damage * GrantsSystem:getDamageMultiplier()
     end
 end
 

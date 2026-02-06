@@ -1,9 +1,9 @@
 -- Upgrade System
--- Manages tool selection and upgrades on level up
--- Simplified for Love2D port
+-- Manages tool selection, bonus item upgrades, and tool evolution on level up
+-- Matches original Playdate design: 2 tool options + 2 bonus item options per level up
 
-local MAX_LEVEL = 4  -- Maximum upgrade level for tools
-local MAX_TOOLS = 8  -- Maximum tools on station
+local MAX_LEVEL = 4  -- Maximum upgrade level for tools and items
+local MAX_EQUIPMENT = 8  -- Combined limit for tools + bonus items
 
 UpgradeSystem = {
     -- Tool levels (by id)
@@ -56,7 +56,9 @@ function UpgradeSystem:isUnlocked(condition)
     if condition == "start" then
         return true
     end
-    -- Parse "episode_N" pattern
+    if condition == "all_episodes" then
+        return self.currentEpisode >= 5
+    end
     local reqEp = condition and condition:match("episode_(%d+)")
     if reqEp then
         return self.currentEpisode >= tonumber(reqEp)
@@ -65,18 +67,20 @@ function UpgradeSystem:isUnlocked(condition)
 end
 
 -- Get random selection of upgrade options for level up
--- Returns array of options (tools - either new or upgrades)
+-- Returns array of options: up to 2 tools + up to 2 bonus items (matching original design)
 function UpgradeSystem:getUpgradeOptions(station)
     local options = {}
-
-    -- Count current tools
     local currentToolCount = #station.tools
 
-    -- Build list of eligible options
-    local eligible = {}
+    -- Combined equipment count (tools + bonus items share 8 slots)
+    local bonusItemCount = BonusItemsSystem and BonusItemsSystem:getActiveItemCount() or 0
+    local totalEquipment = currentToolCount + bonusItemCount
 
+    -- =====================
+    -- 1. Build tool options (new or upgrade, exclude evolved tools)
+    -- =====================
+    local toolEligible = {}
     for _, toolData in ipairs(self.availableTools) do
-        -- Check if station already has this tool
         local hasTool = false
         local currentLevel = 0
         local toolRef = nil
@@ -91,18 +95,17 @@ function UpgradeSystem:getUpgradeOptions(station)
         end
 
         if not hasTool then
-            -- Can add new tool if under limit
-            if currentToolCount < MAX_TOOLS then
-                table.insert(eligible, {
+            -- Only offer new tools if under the combined equipment limit
+            if totalEquipment < MAX_EQUIPMENT then
+                table.insert(toolEligible, {
                     data = toolData,
                     isNew = true,
                     currentLevel = 0,
                     nextLevel = 1
                 })
             end
-        elseif currentLevel < MAX_LEVEL then
-            -- Can upgrade existing tool
-            table.insert(eligible, {
+        elseif currentLevel < MAX_LEVEL and not (toolRef and toolRef.evolved) then
+            table.insert(toolEligible, {
                 data = toolData,
                 isNew = false,
                 currentLevel = currentLevel,
@@ -112,16 +115,16 @@ function UpgradeSystem:getUpgradeOptions(station)
         end
     end
 
-    -- Shuffle and select up to 2 tool options (reserve 2 slots for bonus items)
-    self:shuffleArray(eligible)
-    local toolSlots = math.min(2, #eligible)
+    -- Add up to 2 tool options
+    self:shuffleArray(toolEligible)
+    local toolSlots = math.min(2, #toolEligible)
     for i = 1, toolSlots do
-        local option = eligible[i]
+        local option = toolEligible[i]
         local displayData = {
             id = option.data.id,
             type = "tool",
             name = option.data.name,
-            description = option.isNew and option.data.description or ("Upgrade to Level " .. option.nextLevel),
+            description = option.isNew and option.data.description or ("Level " .. option.nextLevel),
             isNew = option.isNew,
             currentLevel = option.currentLevel,
             nextLevel = option.nextLevel,
@@ -129,13 +132,8 @@ function UpgradeSystem:getUpgradeOptions(station)
             toolRef = option.toolRef
         }
 
-        -- Add level indicator to name if upgrading
         if not option.isNew then
             displayData.name = displayData.name .. " Lv" .. option.nextLevel
-        end
-
-        -- Show upgraded stats in description
-        if not option.isNew then
             local stats = ToolsData.getStatsAtLevel(option.data.id, option.nextLevel)
             if stats then
                 displayData.description = "Dmg: " .. stats.damage .. " | Rate: " .. string.format("%.1f", stats.fireRate)
@@ -145,33 +143,114 @@ function UpgradeSystem:getUpgradeOptions(station)
         table.insert(options, displayData)
     end
 
-    -- Add 2 random bonus item options (no duplicates)
+    -- =====================
+    -- 2. Build bonus item options (new or upgrade)
+    -- =====================
+    local bonusEligible = {}
+    local preferredItems = {}
+
     if BonusItemsData then
-        local usedIds = {}
-        for attempt = 1, 2 do
-            -- Try a few times to avoid duplicates
-            for try = 1, 10 do
-                local bonusItem = BonusItemsData.getRandom()
-                if bonusItem and not usedIds[bonusItem.id] then
-                    usedIds[bonusItem.id] = true
-                    table.insert(options, {
-                        id = bonusItem.id,
-                        type = "bonus_item",
-                        name = bonusItem.name,
-                        description = bonusItem.description,
-                        isNew = false,
-                        bonusItemData = bonusItem,
-                    })
-                    break
+        -- Collect equipped tool IDs for preferential pairing
+        local equippedToolIds = {}
+        for _, equippedTool in ipairs(station.tools) do
+            if equippedTool.data then
+                equippedToolIds[equippedTool.data.id] = true
+            end
+        end
+
+        for _, itemId in ipairs(BonusItemsData.allIds) do
+            local itemData = BonusItemsData.get(itemId)
+            if itemData and BonusItemsData.isUnlocked(itemData.unlockCondition, self.currentEpisode) then
+                local currentLevel = BonusItemsSystem and BonusItemsSystem:getItemLevel(itemId) or 0
+                if currentLevel < MAX_LEVEL then
+                    -- Only offer new items if under the combined equipment limit
+                    if currentLevel == 0 and totalEquipment >= MAX_EQUIPMENT then
+                        -- Skip: can't add new equipment
+                    else
+                        local entry = {
+                            data = itemData,
+                            currentLevel = currentLevel,
+                            isUpgrade = currentLevel > 0,
+                        }
+
+                        -- Preferentially include items that pair with equipped tools
+                        if itemData.pairsWithTool and equippedToolIds[itemData.pairsWithTool] then
+                            table.insert(preferredItems, entry)
+                        else
+                            table.insert(bonusEligible, entry)
+                        end
+                    end
                 end
             end
+        end
+    end
+
+    -- Shuffle both pools
+    self:shuffleArray(preferredItems)
+    self:shuffleArray(bonusEligible)
+
+    -- Fill up to 2 bonus item slots (preferred first)
+    local bonusAdded = 0
+    local usedBonusIds = {}
+
+    -- Add preferred items first
+    for _, entry in ipairs(preferredItems) do
+        if bonusAdded >= 2 then break end
+        if not usedBonusIds[entry.data.id] then
+            usedBonusIds[entry.data.id] = true
+            table.insert(options, self:makeBonusItemOption(entry))
+            bonusAdded = bonusAdded + 1
+        end
+    end
+
+    -- Fill remaining with general items
+    for _, entry in ipairs(bonusEligible) do
+        if bonusAdded >= 2 then break end
+        if not usedBonusIds[entry.data.id] then
+            usedBonusIds[entry.data.id] = true
+            table.insert(options, self:makeBonusItemOption(entry))
+            bonusAdded = bonusAdded + 1
         end
     end
 
     return options
 end
 
--- Apply a tool selection
+-- Helper: create a display option for a bonus item
+function UpgradeSystem:makeBonusItemOption(entry)
+    local itemData = entry.data
+    local isUpgrade = entry.isUpgrade
+    local nextLevel = entry.currentLevel + 1
+
+    local name = itemData.name
+    if isUpgrade then
+        name = name .. " Lv" .. nextLevel
+    end
+
+    -- Look up paired tool name if this item upgrades a specific tool
+    local pairsWithToolName = nil
+    if itemData.pairsWithTool then
+        local toolData = ToolsData.get(itemData.pairsWithTool)
+        if toolData then
+            pairsWithToolName = toolData.name
+        end
+    end
+
+    return {
+        id = itemData.id,
+        type = "bonus_item",
+        name = name,
+        description = itemData.description,
+        isNew = false,
+        isUpgrade = isUpgrade,
+        currentLevel = entry.currentLevel,
+        nextLevel = nextLevel,
+        bonusItemData = itemData,
+        pairsWithToolName = pairsWithToolName,
+    }
+end
+
+-- Apply a tool selection (returns success, evolutionInfo)
 function UpgradeSystem:applyToolSelection(option, station, slotIndex)
     if option.isNew then
         -- Attach new tool
@@ -184,12 +263,11 @@ function UpgradeSystem:applyToolSelection(option, station, slotIndex)
 
             print("Attached new tool: " .. option.name .. " (Lv1)")
 
-            -- Play upgrade sound
             if AudioManager then
                 AudioManager:playSFX("tool_upgrade", 0.6)
             end
 
-            return true
+            return true, nil
         end
     else
         -- Upgrade existing tool
@@ -197,23 +275,62 @@ function UpgradeSystem:applyToolSelection(option, station, slotIndex)
             option.toolRef.level = option.nextLevel
             self.toolLevels[option.id] = option.nextLevel
 
-            -- Recalculate tool stats
             if option.toolRef.recalculateStats then
                 option.toolRef:recalculateStats()
             end
 
             print("Upgraded tool: " .. option.originalData.id .. " to Lv" .. option.nextLevel)
 
-            -- Play upgrade sound
             if AudioManager then
                 AudioManager:playSFX("tool_upgrade", 0.6)
             end
 
-            return true
+            -- Check for auto-evolution: tool at max level + matching bonus at max level
+            local evolutionInfo = nil
+            if option.nextLevel >= MAX_LEVEL and option.originalData.pairsWithBonus then
+                if BonusItemsSystem and BonusItemsSystem:canEvolve(option.originalData.id) then
+                    option.toolRef:evolve()
+                    evolutionInfo = {
+                        evolved = true,
+                        evolvedName = option.originalData.upgradedName or (option.originalData.name .. " EVO"),
+                        originalData = option.originalData,
+                    }
+                    print("Auto-evolved: " .. option.originalData.id .. " -> " .. (evolutionInfo.evolvedName or "???"))
+                end
+            end
+
+            return true, evolutionInfo
         end
     end
 
-    return false
+    return false, nil
+end
+
+-- Check and trigger evolution when a bonus item is applied
+-- Call this after BonusItemsSystem:applyItem() to check if evolution should happen
+function UpgradeSystem:checkBonusEvolution(bonusItemData, station)
+    if not bonusItemData or not bonusItemData.pairsWithTool then return nil end
+
+    local bonusLevel = BonusItemsSystem and BonusItemsSystem:getItemLevel(bonusItemData.id) or 0
+    if bonusLevel < MAX_LEVEL then return nil end
+
+    -- Bonus is at max level, check if the paired tool is also at max level
+    for _, equippedTool in ipairs(station.tools) do
+        if equippedTool.data and equippedTool.data.id == bonusItemData.pairsWithTool then
+            if equippedTool.level >= MAX_LEVEL and not equippedTool.evolved then
+                equippedTool:evolve()
+                local evolvedName = equippedTool.data.upgradedName or (equippedTool.data.name .. " EVO")
+                print("Auto-evolved (via bonus): " .. equippedTool.data.id .. " -> " .. evolvedName)
+                return {
+                    evolved = true,
+                    evolvedName = evolvedName,
+                    originalData = equippedTool.data,
+                }
+            end
+        end
+    end
+
+    return nil
 end
 
 -- Get tool class by ID

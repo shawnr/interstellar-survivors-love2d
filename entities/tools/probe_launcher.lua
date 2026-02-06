@@ -85,4 +85,16 @@ function ProbeLauncher:recalculateStats()
     end
 end
 
+-- Evolution: Drone Carrier — 12 dmg, +2 probes per shot
+function ProbeLauncher:evolve()
+    ProbeLauncher.super.evolve(self)
+    self.damage = 12
+    self.probeCount = self.probeCount + 2
+    self.homingStrength = 300
+    self.spreadAngle = 20
+    if GrantsSystem then
+        self.damage = self.damage * GrantsSystem:getDamageMultiplier()
+    end
+end
+
 return ProbeLauncher

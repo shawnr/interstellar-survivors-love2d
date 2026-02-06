@@ -214,16 +214,21 @@ function SlotPicker:draw()
         love.graphics.line(x1, y1, x2, y2)
     end
 
-    -- Draw center station circle
-    love.graphics.setColor(0.3, 0.35, 0.45)
-    love.graphics.circle("fill", diagramCX, diagramCY, 14)
-    love.graphics.setColor(0.5, 0.6, 0.7)
-    love.graphics.circle("line", diagramCX, diagramCY, 14)
-    -- Station label
-    love.graphics.setColor(0.7, 0.8, 0.9)
-    local stLabel = "ST"
-    local stW = font:getWidth(stLabel)
-    love.graphics.print(stLabel, diagramCX - stW / 2, diagramCY - fontH / 2)
+    -- Draw center station sprite
+    local stationImg = Utils.getCachedImage("assets/images/shared/station_base.png")
+    if stationImg then
+        local sw, sh = stationImg:getWidth(), stationImg:getHeight()
+        local stationSize = 24
+        local scale = stationSize / math.max(sw, sh)
+        love.graphics.setColor(0, 1, 1)  -- Cyan tint to match game
+        love.graphics.draw(stationImg, diagramCX, diagramCY, 0, scale, scale, sw / 2, sh / 2)
+    else
+        -- Fallback: simple circle
+        love.graphics.setColor(0.3, 0.35, 0.45)
+        love.graphics.circle("fill", diagramCX, diagramCY, 12)
+        love.graphics.setColor(0.5, 0.6, 0.7)
+        love.graphics.circle("line", diagramCX, diagramCY, 12)
+    end
 
     -- Draw each slot node
     for i = 0, Constants.STATION_SLOTS - 1 do

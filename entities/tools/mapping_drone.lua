@@ -64,4 +64,14 @@ function MappingDrone:recalculateStats()
     end
 end
 
+-- Evolution: Perihelion Strike — 35 dmg, improved homing
+function MappingDrone:evolve()
+    MappingDrone.super.evolve(self)
+    self.damage = 35
+    self.homingStrength = 360
+    if GrantsSystem then
+        self.damage = self.damage * GrantsSystem:getDamageMultiplier()
+    end
+end
+
 return MappingDrone

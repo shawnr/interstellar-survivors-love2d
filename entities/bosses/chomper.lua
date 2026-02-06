@@ -49,6 +49,10 @@ function Chomper:init(x, y)
     self.chargeDy = 0
     self.chargeSpeed = 0
 
+    -- Enraged charge sub-state
+    self.enragedCharging = false
+    self.enragedChargeTimer = 0
+
     print("Chomper boss spawned!")
 end
 
@@ -191,23 +195,13 @@ function Chomper:updateRecovering(dt)
 end
 
 function Chomper:updateEnraged(dt)
-    -- More aggressive orbiting with frequent charges
-    self:orbitStation(dt, 1.3)
+    if self.enragedCharging then
+        -- Continuous charge movement (mirrors normal CHARGING phase)
+        self.x = self.x + self.chargeDx * self.chargeSpeed * dt
+        self.y = self.y + self.chargeDy * self.chargeSpeed * dt
 
-    if self.phaseTimer >= 2.0 then
-        -- Charge!
-        local dx = self.targetX - self.x
-        local dy = self.targetY - self.y
-        local dist = math.sqrt(dx * dx + dy * dy)
-        if dist > 0 then
-            self.chargeDx = dx / dist
-            self.chargeDy = dy / dist
-        end
-        self.chargeSpeed = self.speed * 3.5
-
-        -- Rush inline
-        self.x = self.x + self.chargeDx * self.chargeSpeed * dt * 30
-        self.y = self.y + self.chargeDy * self.chargeSpeed * dt * 30
+        local angle = Utils.vectorToAngle(self.chargeDx, self.chargeDy)
+        self:setRotation(angle)
 
         -- Check station hit
         local distSq = Utils.distanceSquared(self.x, self.y, self.targetX, self.targetY)
@@ -222,9 +216,34 @@ function Chomper:updateEnraged(dt)
             end
             self.x = self.targetX + self.chargeDx * (hitDist + 20)
             self.y = self.targetY + self.chargeDy * (hitDist + 20)
+            self.enragedCharging = false
+            self.phaseTimer = 0
+            return
         end
 
-        self.phaseTimer = 0
+        -- Timeout: stop charging after 1.5 seconds
+        self.enragedChargeTimer = self.enragedChargeTimer + dt
+        if self.enragedChargeTimer >= 1.5 then
+            self.enragedCharging = false
+            self.phaseTimer = 0
+        end
+        return
+    end
+
+    -- More aggressive orbiting with frequent charges
+    self:orbitStation(dt, 1.3)
+
+    if self.phaseTimer >= 2.0 then
+        local dx = self.targetX - self.x
+        local dy = self.targetY - self.y
+        local dist = math.sqrt(dx * dx + dy * dy)
+        if dist > 0 then
+            self.chargeDx = dx / dist
+            self.chargeDy = dy / dist
+        end
+        self.chargeSpeed = self.speed * 3.5
+        self.enragedCharging = true
+        self.enragedChargeTimer = 0
     end
 end
 

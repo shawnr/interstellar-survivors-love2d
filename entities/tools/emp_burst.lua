@@ -67,4 +67,14 @@ function EMPBurst:recalculateStats()
     end
 end
 
+-- Evolution: Ion Storm — 15 dmg, radius x2 (more projectiles)
+function EMPBurst:evolve()
+    EMPBurst.super.evolve(self)
+    self.damage = 15
+    self.projectilesPerShot = 16
+    if GrantsSystem then
+        self.damage = self.damage * GrantsSystem:getDamageMultiplier()
+    end
+end
+
 return EMPBurst

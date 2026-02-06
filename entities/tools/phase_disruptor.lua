@@ -49,4 +49,13 @@ function PhaseDisruptor:fire()
     end
 end
 
+-- Evolution: Dimensional Rift — 30 dmg, pierces all enemies
+function PhaseDisruptor:evolve()
+    PhaseDisruptor.super.evolve(self)
+    self.damage = 30
+    if GrantsSystem then
+        self.damage = self.damage * GrantsSystem:getDamageMultiplier()
+    end
+end
+
 return PhaseDisruptor

@@ -63,7 +63,7 @@ function TeslaCoil:fire()
     end
 
     if AudioManager then
-        AudioManager:playSFX("tool_rail_driver", 0.5)
+        AudioManager:playSFX("tool_tesla_coil", 0.5)
     end
 end
 
@@ -152,6 +152,18 @@ function TeslaCoil:recalculateStats()
     elseif self.level >= 2 then
         self.maxChains = 3
         self.chainRange = 80
+    end
+end
+
+-- Evolution: Storm Generator — 16 dmg, +1 chain target
+function TeslaCoil:evolve()
+    TeslaCoil.super.evolve(self)
+    self.damage = 16
+    self.maxChains = self.maxChains + 1
+    self.chainRange = 100
+    self.chainDamageMult = 0.9
+    if GrantsSystem then
+        self.damage = self.damage * GrantsSystem:getDamageMultiplier()
     end
 end
 

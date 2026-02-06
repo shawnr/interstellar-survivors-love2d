@@ -63,16 +63,20 @@ GameplayScene = {
     slowDuration = 2.0,
     slowMultiplier = 0.5,
 
-    -- Fire rate debuff (from Productivity Liaison boss)
+    -- Fire rate debuff (from Productivity Liaison boss) — affects half the tools
     fireRateDebuff = false,
     fireRateDebuffTimer = 0,
     fireRateDebuffDuration = 2.0,
     fireRateDebuffMultiplier = 0.5,
+    jammedTools = {},  -- Track which tools are jammed
 
     -- Control inversion debuff (from ImprobabilityEngine boss)
     controlInversion = false,
     controlInversionTimer = 0,
     controlInversionDuration = 3.0,
+
+    -- Auto level-up choice (set when player picks "Always RP" or "Always Health")
+    autoLevelChoice = nil,  -- nil, "rp", or "health"
 
     -- Run stats (for results screen)
     stats = nil,
@@ -95,9 +99,17 @@ function GameplayScene:init()
     self.slowTimer = 0
     self.fireRateDebuff = false
     self.fireRateDebuffTimer = 0
+    self.jammedTools = {}
     self.controlInversion = false
     self.controlInversionTimer = 0
+    self.autoLevelChoice = nil
     self.stats = { mobKills = 0 }
+
+    -- On-kill effects tracking
+    self.killCounter = 0
+
+    -- Health regeneration timer
+    self.regenTimer = 0
 end
 
 function GameplayScene:enter(params)
@@ -121,9 +133,17 @@ function GameplayScene:enter(params)
     self.slowTimer = 0
     self.fireRateDebuff = false
     self.fireRateDebuffTimer = 0
+    self.jammedTools = {}
     self.controlInversion = false
     self.controlInversionTimer = 0
+    self.autoLevelChoice = nil
     self.stats = { mobKills = 0 }
+
+    -- On-kill effects tracking
+    self.killCounter = 0
+
+    -- Health regeneration timer
+    self.regenTimer = 0
 
     -- Reset VFX
     VFXManager:init()
@@ -241,6 +261,18 @@ function GameplayScene:update(dt)
     -- Update elapsed time
     self.elapsedTime = self.elapsedTime + dt
 
+    -- Health regeneration (Backup Generator bonus item)
+    if BonusItemsSystem then
+        self.regenTimer = self.regenTimer + dt
+        if self.regenTimer >= 5.0 then
+            self.regenTimer = 0
+            local regen = BonusItemsSystem:getHealthRegen()
+            if regen > 0 and self.station then
+                self.station:heal(regen)
+            end
+        end
+    end
+
     -- Update starfield drift
     for _, star in ipairs(self.starfield) do
         star.y = star.y + star.speed * dt * 8
@@ -264,10 +296,13 @@ function GameplayScene:update(dt)
         self.fireRateDebuffTimer = self.fireRateDebuffTimer - dt
         if self.fireRateDebuffTimer <= 0 then
             self.fireRateDebuff = false
-            -- Restore normal fire intervals on all tools
+            -- Restore normal fire intervals on jammed tools
             for _, tool in ipairs(self.station.tools) do
-                tool:recalculateStats()
+                if self.jammedTools[tool] then
+                    tool:recalculateStats()
+                end
             end
+            self.jammedTools = {}
         end
     end
 
@@ -401,6 +436,8 @@ function GameplayScene:spawnBoss()
 
         if AudioManager then
             AudioManager:playSFX("wave_start", 1.0)
+            -- Switch to boss music
+            AudioManager:playMusic("music_boss")
         end
 
         -- Discover boss in codex
@@ -530,6 +567,11 @@ function GameplayScene:checkCollisions()
                             if distSq < collisionDistSq then
                                 mob:takeDamage(proj:getDamage())
 
+                                -- Show crit VFX if this was a critical hit
+                                if proj.wasCrit and VFXManager then
+                                    VFXManager:addFloatingText("CRIT!", mob.x, mob.y - 15, {1, 1, 0})
+                                end
+
                                 -- Track hit target for tick-based projectiles
                                 if proj.hitTargets then
                                     proj.hitTargets[mob] = true
@@ -573,6 +615,11 @@ function GameplayScene:checkCollisions()
 
                         if distSq < collisionDistSq then
                             self.boss:takeDamage(proj:getDamage())
+
+                            -- Crit VFX for boss hits
+                            if proj.wasCrit and VFXManager then
+                                VFXManager:addFloatingText("CRIT!", self.boss.x, self.boss.y - 15, {1, 1, 0})
+                            end
 
                             if proj.hitTargets then
                                 proj.hitTargets[self.boss] = true
@@ -649,16 +696,46 @@ function GameplayScene:applyFireRateDebuff()
     self.fireRateDebuff = true
     self.fireRateDebuffTimer = self.fireRateDebuffDuration
 
-    -- Increase fire interval on all tools (slower firing)
-    for _, tool in ipairs(self.station.tools) do
-        tool.fireInterval = tool.fireInterval / self.fireRateDebuffMultiplier
+    -- Select half the tools randomly to jam
+    self.jammedTools = {}
+    local toolCount = #self.station.tools
+    local jamCount = math.ceil(toolCount / 2)
+
+    -- Build shuffled index list
+    local indices = {}
+    for i = 1, toolCount do
+        table.insert(indices, i)
+    end
+    for i = #indices, 2, -1 do
+        local j = math.random(i)
+        indices[i], indices[j] = indices[j], indices[i]
+    end
+
+    -- Jam the first jamCount tools from shuffled list
+    for i = 1, jamCount do
+        local tool = self.station.tools[indices[i]]
+        if tool then
+            self.jammedTools[tool] = true
+            tool.fireInterval = tool.fireInterval / self.fireRateDebuffMultiplier
+        end
     end
 
     if AudioManager then
         AudioManager:playSFX("station_hit", 0.4)
     end
 
-    print("Station fire rate jammed!")
+    print("Station fire rate jammed! (" .. jamCount .. "/" .. toolCount .. " tools)")
+end
+
+-- Re-apply fire rate debuff after stat recalculation (only to jammed tools)
+function GameplayScene:reapplyFireRateDebuffIfActive()
+    if self.fireRateDebuff then
+        for _, tool in ipairs(self.station.tools) do
+            if self.jammedTools[tool] then
+                tool.fireInterval = tool.fireInterval / self.fireRateDebuffMultiplier
+            end
+        end
+    end
 end
 
 function GameplayScene:applyControlInversion()
@@ -676,38 +753,61 @@ end
 function GameplayScene:onLevelUp()
     print("Level up callback in gameplay scene - Level " .. GameManager.playerLevel)
 
+    -- Play level up sound and flash always
+    if AudioManager then
+        AudioManager:playSFX("level_up", 0.7)
+    end
+    if VFXManager then
+        VFXManager:addScreenFlash({1, 0.9, 0.5}, 0.3)
+    end
+
+    -- Auto-level: if player previously chose "Always RP" or "Always Health", apply directly
+    if self.autoLevelChoice then
+        self:applyFallbackBonus(self.autoLevelChoice)
+        return
+    end
+
     -- Get upgrade options from UpgradeSystem
     if UpgradeSystem and UpgradeSelection then
         local options = UpgradeSystem:getUpgradeOptions(self.station)
 
         if #options > 0 then
-            -- Show upgrade selection UI
+            -- Normal upgrade selection (up to 2 tools + up to 2 bonus items)
             self.isLevelingUp = true
             UpgradeSelection:show(options, function(selected)
                 self:onUpgradeSelected(selected)
             end)
-
-            -- Play level up sound
-            if AudioManager then
-                AudioManager:playSFX("level_up", 0.7)
-            end
-
-            -- Level-up screen flash
-            if VFXManager then
-                VFXManager:addScreenFlash({1, 0.9, 0.5}, 0.3)
-            end
         else
-            -- No upgrades available, just heal
-            if self.station then
-                local hpBonus = math.floor(self.station.maxHealth * 0.1)
-                self.station:heal(hpBonus)
-            end
+            -- All equipment maxed — show fallback options
+            local fallbackOptions = {
+                { type = "fallback", action = "rp", name = "RP Bonus", description = "Gain 25 Research Points" },
+                { type = "fallback", action = "health", name = "Health Bonus", description = "Restore 10% HP" },
+                { type = "fallback", action = "always_rp", name = "Always RP", description = "Auto-select RP each level" },
+                { type = "fallback", action = "always_health", name = "Always Health", description = "Auto-select HP each level" },
+            }
+            self.isLevelingUp = true
+            UpgradeSelection:show(fallbackOptions, function(selected)
+                self:onUpgradeSelected(selected)
+            end)
         end
-    else
-        -- Fallback: just heal station
+    end
+end
+
+function GameplayScene:applyFallbackBonus(bonusType)
+    if bonusType == "rp" then
+        if GameManager then
+            GameManager:awardRP(25)
+        end
+        if VFXManager then
+            VFXManager:addFloatingText("+25 RP", self.station.x, self.station.y - 30, {1, 0.9, 0.2})
+        end
+    elseif bonusType == "health" then
         if self.station then
-            local hpBonus = math.floor(self.station.maxHealth * 0.05)
+            local hpBonus = math.floor(self.station.maxHealth * 0.10)
             self.station:heal(hpBonus)
+        end
+        if VFXManager then
+            VFXManager:addFloatingText("+HP", self.station.x, self.station.y - 30, {0.2, 1, 0.2})
         end
     end
 end
@@ -715,12 +815,36 @@ end
 function GameplayScene:onUpgradeSelected(option)
     print("Upgrade selected: " .. (option.name or "unknown"))
 
+    if option.type == "fallback" then
+        if option.action == "rp" then
+            self:applyFallbackBonus("rp")
+        elseif option.action == "health" then
+            self:applyFallbackBonus("health")
+        elseif option.action == "always_rp" then
+            self.autoLevelChoice = "rp"
+            self:applyFallbackBonus("rp")
+        elseif option.action == "always_health" then
+            self.autoLevelChoice = "health"
+            self:applyFallbackBonus("health")
+        end
+        self.isLevelingUp = false
+        return
+    end
+
     if option.type == "bonus_item" then
         -- Bonus item: apply immediately, no slot picker
         if BonusItemsSystem and option.bonusItemData then
             BonusItemsSystem:applyItem(option.bonusItemData, self.station)
             if VFXManager then
                 VFXManager:addFloatingText(option.name, self.station.x, self.station.y - 30, {0.2, 1, 0.5})
+            end
+
+            -- Check for auto-evolution triggered by this bonus item reaching max level
+            if UpgradeSystem then
+                local evoInfo = UpgradeSystem:checkBonusEvolution(option.bonusItemData, self.station)
+                if evoInfo then
+                    self:showEvolutionEffect(evoInfo)
+                end
             end
         end
 
@@ -742,8 +866,18 @@ function GameplayScene:onUpgradeSelected(option)
         end)
     else
         -- Upgrade existing tool: apply immediately (slot already known)
+        local evolutionInfo = nil
         if UpgradeSystem then
-            UpgradeSystem:applyToolSelection(option, self.station)
+            local success
+            success, evolutionInfo = UpgradeSystem:applyToolSelection(option, self.station)
+        end
+
+        -- Re-apply fire rate debuff if active (recalculateStats resets fireInterval)
+        self:reapplyFireRateDebuffIfActive()
+
+        -- Show evolution effect if auto-evolved
+        if evolutionInfo then
+            self:showEvolutionEffect(evolutionInfo)
         end
 
         -- Discover tool in codex
@@ -773,6 +907,9 @@ function GameplayScene:onSlotSelected(slotIndex)
         UpgradeSystem:applyToolSelection(option, self.station, slotIndex)
     end
 
+    -- Re-apply fire rate debuff if active
+    self:reapplyFireRateDebuffIfActive()
+
     -- Discover tool in codex
     if SaveManager and option.id then
         SaveManager:discoverEntry("tool_" .. option.id)
@@ -787,6 +924,52 @@ function GameplayScene:onSlotSelected(slotIndex)
     -- Resume gameplay
     self.isPlacingTool = false
     self.pendingToolOption = nil
+end
+
+-- Show evolution VFX when a tool auto-evolves
+function GameplayScene:showEvolutionEffect(evolutionInfo)
+    if not evolutionInfo or not evolutionInfo.evolved then return end
+
+    local name = evolutionInfo.evolvedName or "EVOLVED"
+    if VFXManager then
+        VFXManager:addFloatingText(
+            name .. "!",
+            self.station.x, self.station.y - 30,
+            {1, 0.8, 0}
+        )
+        VFXManager:addScreenFlash({1, 1, 1}, 0.3)
+    end
+    if AudioManager then
+        AudioManager:playSFX("tool_upgrade", 0.8)
+    end
+end
+
+-- Called when a MOB is destroyed (for on-kill bonus effects)
+function GameplayScene:onMobKilled(mob)
+    if not BonusItemsSystem then return end
+
+    -- HP on Kill (Kinetic Absorber): heal 1 HP every N kills
+    local hpThreshold = BonusItemsSystem:getHPOnKillThreshold()
+    if hpThreshold > 0 then
+        self.killCounter = (self.killCounter or 0) + 1
+        if self.killCounter >= hpThreshold then
+            self.killCounter = 0
+            if self.station then
+                self.station:heal(1)
+                if VFXManager then
+                    VFXManager:addFloatingText("+1", self.station.x, self.station.y - 20, {0.3, 1, 0.3})
+                end
+            end
+        end
+    end
+
+    -- Cooldown on Kill (Rapid Loader): reduce all tool cooldowns by percentage
+    local cooldownReduction = BonusItemsSystem:getCooldownOnKill()
+    if cooldownReduction > 0 and self.station then
+        for _, tool in ipairs(self.station.tools) do
+            tool.fireCooldown = tool.fireCooldown * (1 - cooldownReduction)
+        end
+    end
 end
 
 -- Create a pulse effect (called by TractorPulse tool)
@@ -1018,9 +1201,10 @@ function GameplayScene:drawHUD()
     end
 
     -- Active bonus items count
-    if BonusItemsSystem and #BonusItemsSystem.activeItems > 0 then
+    local itemCount = BonusItemsSystem and BonusItemsSystem:getActiveItemCount() or 0
+    if itemCount > 0 then
         love.graphics.setColor(0.2, 0.8, 0.4)
-        love.graphics.print("+" .. #BonusItemsSystem.activeItems, debuffX, Constants.SCREEN_HEIGHT - 18)
+        love.graphics.print("+" .. itemCount, debuffX, Constants.SCREEN_HEIGHT - 18)
     end
 
     -- Equipped tools display (centered in bottom bar)

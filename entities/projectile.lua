@@ -212,9 +212,20 @@ function Projectile:deactivate()
     self.active = false
 end
 
--- Get damage value
+-- Get damage value (with critical hit calculation)
 function Projectile:getDamage()
-    return self.damage
+    local damage = self.damage
+
+    -- Critical hit check (Critical Matrix bonus item)
+    local critChance = BonusItemsSystem and BonusItemsSystem:getCritChance() or 0
+    if critChance > 0 and math.random() < critChance then
+        damage = damage * 2
+        self.wasCrit = true
+    else
+        self.wasCrit = false
+    end
+
+    return damage
 end
 
 -- Find best homing target (nearest active mob or boss)

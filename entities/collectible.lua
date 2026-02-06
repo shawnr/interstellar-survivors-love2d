@@ -95,6 +95,20 @@ function Collectible:update(dt)
     local collectRadiusSq = self.collectRadius * self.collectRadius
     local pickupRadiusSq = self.pickupRadius * self.pickupRadius
 
+    -- Salvage Drone auto-collection: RP orbs get pulled from extended range
+    if self.collectibleType == Collectible.TYPES.RP then
+        local autoRange = BonusItemsSystem and BonusItemsSystem:getAutoCollectRange() or 0
+        if autoRange > 0 and distSq < autoRange * autoRange and distSq > collectRadiusSq then
+            -- Pull toward station at higher speed than passive drift
+            local dist = math.sqrt(distSq)
+            local pullSpeed = 180
+            local invDist = 1 / dist
+            self.x = self.x + dx * invDist * pullSpeed * dt
+            self.y = self.y + dy * invDist * pullSpeed * dt
+            return  -- Skip normal movement
+        end
+    end
+
     -- Move toward station
     if distSq > 1 then
         if distSq < collectRadiusSq then

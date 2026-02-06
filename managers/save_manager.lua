@@ -15,6 +15,7 @@ local DEFAULT_DATA = {
     settings = {
         musicVolume = 0.7,
         sfxVolume = 0.8,
+        cutsceneSkipEnabled = false,
     },
     -- Meta-progression
     spendableRP = 0,
@@ -204,6 +205,7 @@ function SaveManager:discoverEntry(entryId)
     if not self.data.discoveredEntries then self.data.discoveredEntries = {} end
     self.data.discoveredEntries[entryId] = true
     self.dirty = true
+    self:save()
 end
 
 function SaveManager:isDiscovered(entryId)
@@ -226,6 +228,34 @@ function SaveManager:setSetting(key, value)
     self.data.settings[key] = value
     self.dirty = true
     self:save()
+end
+
+-- Cutscene skip setting
+function SaveManager:getCutsceneSkipEnabled()
+    return self:getSetting("cutsceneSkipEnabled") or false
+end
+
+function SaveManager:setCutsceneSkipEnabled(enabled)
+    self:setSetting("cutsceneSkipEnabled", enabled)
+end
+
+-- Reset all progress
+function SaveManager:resetAllProgress()
+    -- Clear all data and recreate from defaults
+    self.data = {}
+    for key, value in pairs(DEFAULT_DATA) do
+        if type(value) == "table" then
+            self.data[key] = {}
+            for k, v in pairs(value) do
+                self.data[key][k] = v
+            end
+        else
+            self.data[key] = value
+        end
+    end
+    self.dirty = true
+    self:save()
+    print("SaveManager: All progress reset")
 end
 
 return SaveManager

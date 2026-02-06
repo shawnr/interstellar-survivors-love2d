@@ -124,4 +124,13 @@ function RepulsorField:recalculateStats()
     end
 end
 
+-- Evolution: Shockwave Generator — push x3, radius x2, adds collision damage
+function RepulsorField:evolve()
+    RepulsorField.super.evolve(self)
+    self.pushRange = self.pushRange * 2
+    self.pushForce = self.pushForce * 3
+    self.collisionDamage = 5
+    self.visualProjectiles = 16
+end
+
 return RepulsorField

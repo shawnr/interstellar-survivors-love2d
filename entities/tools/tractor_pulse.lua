@@ -83,4 +83,14 @@ function TractorPulse:createProjectile(x, y, angle)
     -- No projectile for tractor pulse
 end
 
+-- Evolution: Gravity Well — 3x pull strength, 50% wider range, slows MOBs
+function TractorPulse:evolve()
+    TractorPulse.super.evolve(self)
+    self.upgraded = true
+    self.pullRange = 120
+    self.rangeBonus = 0.5
+    self.slowsMobs = true
+    self.slowDuration = 2.0
+end
+
 return TractorPulse

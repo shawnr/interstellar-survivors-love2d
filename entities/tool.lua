@@ -15,8 +15,10 @@ function Tool:init(toolData)
     self.slotIndex = nil
     self.slotData = nil
 
-    -- Level system (1-4)
+    -- Level system (1-4), evolution
     self.level = 1
+    self.evolved = false
+    self.evolvedName = nil
 
     -- Tool stats from data
     self.damage = toolData.baseDamage or 1
@@ -176,11 +178,22 @@ function Tool:draw()
     end
 end
 
+-- Evolve the tool (override in subclasses for specific effects)
+function Tool:evolve()
+    self.evolved = true
+    local toolData = ToolsData.get(self.data.id)
+    if toolData and toolData.upgradedName then
+        self.evolvedName = toolData.upgradedName
+    end
+    self:recalculateStats()
+    print("Tool " .. self.data.id .. " EVOLVED to " .. (self.evolvedName or "???"))
+end
+
 -- Get tool info for UI
 function Tool:getInfo()
     return {
-        name = self.data.name,
-        level = self.level,
+        name = self.evolved and self.evolvedName or self.data.name,
+        level = self.evolved and "EVO" or self.level,
         damage = self.damage,
         fireRate = self.fireRate,
         pattern = self.pattern,

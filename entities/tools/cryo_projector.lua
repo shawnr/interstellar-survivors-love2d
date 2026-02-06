@@ -8,7 +8,7 @@ CryoProjector.DATA = {
     name = "Cryo Projector",
     description = "Spread shot. Dmg: 4x3",
     imagePath = "assets/images/tools/tool_cryo_projector",
-    projectileImage = "assets/images/tools/tool_cryo_shard",
+    projectileImage = "assets/images/tools/tool_cryo_particle",
 
     baseDamage = 4,
     fireRate = 1.0,
@@ -64,6 +64,18 @@ function CryoProjector:recalculateStats()
     elseif self.level >= 2 then
         self.projectilesPerShot = 4
         self.spreadAngle = 18
+    end
+end
+
+-- Evolution: Absolute Zero — 10 dmg, projectiles apply slow effect
+function CryoProjector:evolve()
+    CryoProjector.super.evolve(self)
+    self.damage = 10
+    self.projectilesPerShot = 7
+    self.spreadAngle = 25
+    self.appliesSlow = true
+    if GrantsSystem then
+        self.damage = self.damage * GrantsSystem:getDamageMultiplier()
     end
 end
 

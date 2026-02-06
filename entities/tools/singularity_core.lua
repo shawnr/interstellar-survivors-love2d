@@ -81,7 +81,7 @@ function SingularityCore:fire()
     end
 
     if AudioManager then
-        AudioManager:playSFX("tool_frequency_scanner", 0.3)
+        AudioManager:playSFX("tool_singularity_core", 0.3)
     end
 end
 
@@ -96,6 +96,19 @@ function SingularityCore:recalculateStats()
         self.maxOrbs = 3
         self.orbitSpeed = 2.4
         self.orbLifetime = 11
+    end
+end
+
+-- Evolution: Black Hole Generator — 12 dmg, expanded orbital range
+function SingularityCore:evolve()
+    SingularityCore.super.evolve(self)
+    self.damage = 12
+    self.maxOrbs = 4
+    self.orbitRadius = 90
+    self.orbitSpeed = 3.2
+    self.orbLifetime = 15
+    if GrantsSystem then
+        self.damage = self.damage * GrantsSystem:getDamageMultiplier()
     end
 end
 

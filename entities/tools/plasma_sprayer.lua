@@ -55,7 +55,7 @@ function PlasmaSprayer:fire()
 
     -- Play sound
     if AudioManager then
-        AudioManager:playSFX("tool_rail_driver", 0.3)
+        AudioManager:playSFX("tool_plasma_sprayer", 0.3)
     end
 end
 
@@ -72,6 +72,18 @@ function PlasmaSprayer:recalculateStats()
         self.projectilesPerShot = 6
         self.spreadAngle = 50
         self.maxRange = 90
+    end
+end
+
+-- Evolution: Inferno Cannon — 6 dmg per projectile, enhanced cone
+function PlasmaSprayer:evolve()
+    PlasmaSprayer.super.evolve(self)
+    self.damage = 6
+    self.projectilesPerShot = 9
+    self.spreadAngle = 70
+    self.maxRange = 120
+    if GrantsSystem then
+        self.damage = self.damage * GrantsSystem:getDamageMultiplier()
     end
 end
 

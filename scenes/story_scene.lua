@@ -20,6 +20,7 @@ function StoryScene:init()
     self.currentLine = 1
     self.onComplete = nil
     self.currentImage = nil
+    self.skipRequested = false
 end
 
 function StoryScene:enter(params)
@@ -30,6 +31,14 @@ function StoryScene:enter(params)
     self.currentLine = 1
     self.lineTimer = 0
     self.currentImage = nil
+
+    -- Check if cutscene skip is enabled
+    if SaveManager and SaveManager:getCutsceneSkipEnabled() then
+        print("Story scene: Cutscene skip enabled, auto-completing")
+        -- Defer completion to next frame to avoid state issues
+        self.skipRequested = true
+        return
+    end
 
     -- Load first panel image
     self:loadPanelImage()
@@ -46,6 +55,13 @@ function StoryScene:loadPanelImage()
 end
 
 function StoryScene:update(dt)
+    -- Handle skip request from enter (deferred to avoid state issues)
+    if self.skipRequested then
+        self.skipRequested = false
+        self:complete()
+        return
+    end
+
     -- Auto-advance timer
     self.lineTimer = self.lineTimer + dt
     if self.lineTimer >= self.autoAdvanceTime then

@@ -227,6 +227,11 @@ function MOB:onDestroyed()
     -- Spawn collectibles
     self:spawnCollectibles()
 
+    -- Notify gameplay scene of kill (for on-kill effects)
+    if GameplayScene and GameplayScene.onMobKilled then
+        GameplayScene:onMobKilled(self)
+    end
+
     -- Start death animation
     self.isDying = true
     self.deathTimer = 0

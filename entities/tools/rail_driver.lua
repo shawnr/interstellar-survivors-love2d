@@ -50,4 +50,14 @@ function RailDriver:fire()
     end
 end
 
+-- Evolution: Rail Cannon — 20 dmg, piercing projectiles
+function RailDriver:evolve()
+    RailDriver.super.evolve(self)
+    self.piercing = true
+    self.damage = 20
+    if GrantsSystem then
+        self.damage = self.damage * GrantsSystem:getDamageMultiplier()
+    end
+end
+
 return RailDriver

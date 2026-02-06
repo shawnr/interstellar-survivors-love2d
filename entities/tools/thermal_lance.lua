@@ -63,4 +63,15 @@ function ThermalLance:recalculateStats()
     end
 end
 
+-- Evolution: Plasma Cutter — 30 dmg, pierces many more enemies
+function ThermalLance:evolve()
+    ThermalLance.super.evolve(self)
+    self.damage = 30
+    self.maxHits = 8
+    self.beamLength = 200
+    if GrantsSystem then
+        self.damage = self.damage * GrantsSystem:getDamageMultiplier()
+    end
+end
+
 return ThermalLance

@@ -25,6 +25,12 @@ local SOUND_FILES = {
     tool_probe_launcher = "assets/sounds/sfx_tool_probe_launcher.wav",
     tool_repulsor_field = "assets/sounds/sfx_tool_repulsor_field.wav",
 
+    -- Placeholder mappings (reuse similar sounds until unique wavs are created)
+    tool_plasma_sprayer = "assets/sounds/sfx_tool_rail_driver.wav",
+    tool_micro_missile_pod = "assets/sounds/sfx_tool_emp_burst.wav",
+    tool_singularity_core = "assets/sounds/sfx_tool_tractor_pulse.wav",
+    tool_tesla_coil = "assets/sounds/sfx_tool_frequency_scanner.wav",
+
     -- Combat sounds
     mob_hit = "assets/sounds/sfx_mob_hit.wav",
     mob_destroyed = "assets/sounds/sfx_mob_destroyed.wav",

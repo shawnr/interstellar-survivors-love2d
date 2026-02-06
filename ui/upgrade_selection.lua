@@ -73,7 +73,7 @@ function UpgradeSelection:getOptionIcon(option)
     if option.type == "bonus_item" and option.bonusItemData and option.bonusItemData.iconPath then
         -- Use iconPath from bonus item data
         return Utils.getCachedIcon(option.bonusItemData.iconPath .. ".png")
-    elseif option.type ~= "bonus_item" then
+    elseif option.type == "tool" or option.type == "evolution" then
         -- Tool icon: use iconPath from originalData if available, else derive from id
         local path
         if option.originalData and option.originalData.iconPath then
@@ -190,13 +190,33 @@ function UpgradeSelection:draw()
         local name = option.name or "Unknown"
         love.graphics.print(name, textX, textY)
 
-        -- Description on second line
+        -- Description on second line (with paired tool name for bonus items)
         local desc = option.description or ""
-        love.graphics.print(desc, textX, textY + 12)
+        if option.pairsWithToolName then
+            if isSelected then
+                love.graphics.setColor(0.7, 0.9, 1)
+            else
+                love.graphics.setColor(0.3, 0.3, 0.5)
+            end
+            love.graphics.print(desc .. " > " .. option.pairsWithToolName, textX, textY + 12)
+        else
+            love.graphics.print(desc, textX, textY + 12)
+        end
+
+        -- Restore main text color for badge
+        if isSelected then
+            love.graphics.setColor(1, 1, 1)
+        else
+            love.graphics.setColor(0, 0, 0)
+        end
 
         -- Type badge on right
         local badge
-        if option.type == "bonus_item" then
+        if option.type == "evolution" then
+            badge = "[EVOLVE]"
+        elseif option.type == "bonus_item" and option.isUpgrade then
+            badge = "[UPGRADE]"
+        elseif option.type == "bonus_item" then
             badge = "[ITEM]"
         elseif option.isNew then
             badge = "[NEW]"

@@ -5,11 +5,15 @@ SettingsScene = {
     selectedIndex = 1,
     musicVolume = 0.7,
     sfxVolume = 0.7,
+    cutsceneSkip = false,
+    resetConfirm = false,  -- Two-step reset confirmation
     returnState = nil,
 
     items = {
         { label = "Music Volume", key = "musicVolume" },
         { label = "SFX Volume", key = "sfxVolume" },
+        { label = "Skip Cutscenes", key = "cutsceneSkip" },
+        { label = "Reset Progress", key = "resetProgress" },
         { label = "Back", key = "back" },
     },
 }
@@ -23,10 +27,14 @@ function SettingsScene:enter(params)
     params = params or {}
     self.selectedIndex = 1
     self.returnState = params.returnState or GameManager.states.TITLE
+    self.resetConfirm = false
 
     -- Load current volumes from AudioManager
     self.musicVolume = AudioManager and AudioManager.musicVolume or 0.7
     self.sfxVolume = AudioManager and AudioManager.sfxVolume or 0.7
+
+    -- Load cutscene skip setting
+    self.cutsceneSkip = SaveManager and SaveManager:getCutsceneSkipEnabled() or false
 
     print("Settings scene entered")
 end
@@ -71,10 +79,42 @@ function SettingsScene:update(dt)
         end
     end
 
+    -- Cutscene skip toggle with A/D
+    if item.key == "cutsceneSkip" then
+        if InputManager:justPressed("a") or InputManager:justPressed("left") or
+           InputManager:justPressed("d") or InputManager:justPressed("right") or
+           InputManager:justPressed("return") or InputManager:justPressed("space") then
+            self.cutsceneSkip = not self.cutsceneSkip
+            if SaveManager then
+                SaveManager:setCutsceneSkipEnabled(self.cutsceneSkip)
+            end
+            if AudioManager then AudioManager:playSFX("menu_move", 0.3) end
+        end
+    end
+
+    -- Reset confirmation state when navigating away
+    if InputManager:justPressed("w") or InputManager:justPressed("up") or
+       InputManager:justPressed("s") or InputManager:justPressed("down") then
+        self.resetConfirm = false
+    end
+
     -- Select / Back
     if InputManager:justPressed("return") or InputManager:justPressed("space") then
         if item.key == "back" then
             self:saveAndBack()
+        elseif item.key == "resetProgress" then
+            if self.resetConfirm then
+                -- Second press: actually reset
+                if SaveManager then
+                    SaveManager:resetAllProgress()
+                end
+                if AudioManager then AudioManager:playSFX("menu_back", 0.5) end
+                self.resetConfirm = false
+            else
+                -- First press: ask for confirmation
+                self.resetConfirm = true
+                if AudioManager then AudioManager:playSFX("menu_move", 0.3) end
+            end
         end
     elseif InputManager:justPressed("escape") then
         self:saveAndBack()
@@ -136,8 +176,36 @@ function SettingsScene:draw()
                 local textW = font:getWidth(item.label)
                 love.graphics.print(item.label, centerX - textW / 2, y)
             end
+        elseif item.key == "cutsceneSkip" then
+            -- Toggle item
+            if isSelected then
+                love.graphics.setColor(1, 1, 1)
+            else
+                love.graphics.setColor(0.5, 0.5, 0.6)
+            end
+            love.graphics.print(item.label, centerX - 80, y)
+
+            -- ON/OFF value
+            local valueText = self.cutsceneSkip and "ON" or "OFF"
+            if isSelected then
+                love.graphics.setColor(self.cutsceneSkip and {0.2, 1, 0.4} or {1, 0.4, 0.4})
+            end
+            love.graphics.print(valueText, centerX + 50, y)
+        elseif item.key == "resetProgress" then
+            -- Reset with confirmation
+            local labelText = self.resetConfirm and "Are you sure?" or item.label
+            if isSelected then
+                love.graphics.setColor(self.resetConfirm and {1, 0.3, 0.3} or {1, 1, 1})
+                local text = "> " .. labelText .. " <"
+                local textW = font:getWidth(text)
+                love.graphics.print(text, centerX - textW / 2, y)
+            else
+                love.graphics.setColor(0.5, 0.5, 0.6)
+                local textW = font:getWidth(labelText)
+                love.graphics.print(labelText, centerX - textW / 2, y)
+            end
         else
-            -- Slider item
+            -- Slider item (volume controls)
             local value = item.key == "musicVolume" and self.musicVolume or self.sfxVolume
             local pct = math.floor(value * 100 + 0.5)
 
